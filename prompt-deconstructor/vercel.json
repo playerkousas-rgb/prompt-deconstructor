@@ -3,9 +3,5 @@
     "env": {
       "HUGGINGFACE_API_TOKEN": "@huggingface_token"
     }
-  },
-  "devCommand": "npm run dev",
-  "installCommand": "npm install",
-  "rootDirectory": ".",
-  "publicDirectory": "public"
+  }
 }
