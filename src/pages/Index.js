@@ -1,4 +1,4 @@
-// Force redeploy - 2026 test
+// Fix 404 with rewrite - March 2026
 import { useState } from 'react';
 
 export default function Home() {
