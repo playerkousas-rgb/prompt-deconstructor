@@ -1,27 +1,42 @@
 // src/pages/api/analyze.js
+import formidable from 'formidable';
 import fs from 'fs/promises';
 
 export const config = {
-  api: { bodyParser: false },
+  api: {
+    bodyParser: false,        // 重要！必須關閉
+  },
 };
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: '只支援 POST' });
+    return res.status(405).json({ error: '只支援 POST 請求' });
   }
 
   try {
-    // 使用內建的 formidable 替代方案（或保持你原本的 formidable）
-    const formData = await new Response(req.body).formData(); // 簡化寫法
-    const file = formData.get('image');
+    const form = formidable({
+      keepExtensions: true,
+      maxFileSize: 4 * 1024 * 1024,   // 限制單檔最大 4MB
+    });
 
-    if (!file) {
-      return res.status(400).json({ error: '沒有收到圖片' });
+    // 使用 Promise 包裝 parse（最穩定寫法）
+    const { files } = await new Promise((resolve, reject) => {
+      form.parse(req, (err, fields, files) => {
+        if (err) reject(err);
+        else resolve({ fields, files });
+      });
+    });
+
+    const uploadedFile = files.image?.[0] || files.image;
+
+    if (!uploadedFile || !uploadedFile.filepath) {
+      return res.status(400).json({ error: '沒有收到有效的圖片檔案' });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    // 讀取檔案成 buffer
+    const fileBuffer = await fs.readFile(uploadedFile.filepath);
 
-    // 直接用 fetch 呼叫 Hugging Face Inference API（更穩定）
+    // 直接呼叫 Hugging Face Inference API（純 fetch，最穩定）
     const hfResponse = await fetch(
       'https://api-inference.huggingface.co/models/nlpconnect/vit-gpt2-image-captioning',
       {
@@ -30,7 +45,7 @@ export default async function handler(req, res) {
           Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
           'Content-Type': 'application/octet-stream',
         },
-        body: buffer,
+        body: fileBuffer,
       }
     );
 
@@ -40,14 +55,19 @@ export default async function handler(req, res) {
     }
 
     const result = await hfResponse.json();
-    const prompt = result[0]?.generated_text || '無法產生描述';
+    const generatedPrompt = result[0]?.generated_text || result.generated_text || "無法產生描述，請再試一次。";
 
-    return res.status(200).json({ prompt });
+    // 清理暫存檔案
+    await fs.unlink(uploadedFile.filepath).catch(() => {});
+
+    return res.status(200).json({ prompt: generatedPrompt });
 
   } catch (error) {
     console.error('API Error:', error);
     return res.status(500).json({ 
-      error: error.message || '分析失敗，請試較小的圖片' 
+      error: error.message.includes('Payload too large') 
+        ? '圖片太大！請上傳小於 3MB 的圖片' 
+        : (error.message || '分析失敗，請稍後再試')
     });
   }
 }
