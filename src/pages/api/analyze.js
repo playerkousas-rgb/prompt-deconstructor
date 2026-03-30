@@ -3,9 +3,7 @@ import formidable from 'formidable';
 import fs from 'fs/promises';
 
 export const config = {
-  api: {
-    bodyParser: false,
-  },
+  api: { bodyParser: false },
 };
 
 export default async function handler(req, res) {
@@ -30,19 +28,39 @@ export default async function handler(req, res) {
 
     const fileBuffer = await fs.readFile(uploadedFile.filepath);
 
-    // 臨時返回固定提示（測試用）
-    const generatedPrompt = `這是一張圖片描述測試。\n\n圖片中似乎包含一些物體和場景。\n建議使用更詳細的 Prompt 來生成新圖。`;
+    // 使用目前較穩定的模型
+    const hfResponse = await fetch(
+      'https://router.huggingface.co/hf-inference/models/Salesforce/blip-image-captioning-large',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+          'Content-Type': 'application/octet-stream',
+        },
+        body: fileBuffer,
+      }
+    );
+
+    if (!hfResponse.ok) {
+      const errorText = await hfResponse.text();
+      throw new Error(`Hugging Face 錯誤: ${errorText}`);
+    }
+
+    const result = await hfResponse.json();
+    let generatedPrompt = result[0]?.generated_text || result.generated_text;
+
+    if (!generatedPrompt || generatedPrompt.length < 10) {
+      generatedPrompt = "這是一張美麗的圖片，適合用來生成藝術作品。";
+    }
 
     await fs.unlink(uploadedFile.filepath).catch(() => {});
 
-    return res.status(200).json({ 
-      prompt: generatedPrompt 
-    });
+    return res.status(200).json({ prompt: generatedPrompt });
 
   } catch (error) {
     console.error('API Error:', error);
     return res.status(500).json({ 
-      error: '目前 Hugging Face 模型暫時無法使用，請稍後再試或聯絡我調整。' 
+      error: 'AI 分析暫時無法使用，請稍後再試或上傳較小的圖片。' 
     });
   }
 }
