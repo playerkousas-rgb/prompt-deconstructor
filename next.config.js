@@ -2,9 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  experimental: {
-    appDir: false
-  }
+  // 移除 experimental.appDir 這一行
 };
 
 module.exports = nextConfig;
