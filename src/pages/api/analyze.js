@@ -1,70 +1,53 @@
 // src/pages/api/analyze.js
-import formidable from 'formidable';
-import { HfInference } from '@huggingface/inference';
 import fs from 'fs/promises';
 
 export const config = {
-  api: {
-    bodyParser: false,
-  },
+  api: { bodyParser: false },
 };
-
-const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: '只支援 POST 請求' });
+    return res.status(405).json({ error: '只支援 POST' });
   }
 
   try {
-    const form = formidable({ multiples: false });
+    // 使用內建的 formidable 替代方案（或保持你原本的 formidable）
+    const formData = await new Response(req.body).formData(); // 簡化寫法
+    const file = formData.get('image');
 
-    // 使用 Promise 包裝 parse，比較穩定
-    const parseForm = () => 
-      new Promise((resolve, reject) => {
-        form.parse(req, (err, fields, files) => {
-          if (err) return reject(err);
-          resolve({ fields, files });
-        });
-      });
-
-    const { files } = await parseForm();
-
-    const uploadedFile = files.image;
-
-    if (!uploadedFile) {
+    if (!file) {
       return res.status(400).json({ error: '沒有收到圖片' });
     }
 
-    // formidable v2 中檔案可能是陣列或單一物件
-    const fileObj = Array.isArray(uploadedFile) ? uploadedFile[0] : uploadedFile;
+    const buffer = Buffer.from(await file.arrayBuffer());
 
-    if (!fileObj || !fileObj.filepath) {
-      return res.status(400).json({ error: '檔案處理失敗' });
+    // 直接用 fetch 呼叫 Hugging Face Inference API（更穩定）
+    const hfResponse = await fetch(
+      'https://api-inference.huggingface.co/models/nlpconnect/vit-gpt2-image-captioning',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+          'Content-Type': 'application/octet-stream',
+        },
+        body: buffer,
+      }
+    );
+
+    if (!hfResponse.ok) {
+      const errorText = await hfResponse.text();
+      throw new Error(`Hugging Face 錯誤: ${errorText}`);
     }
 
-    // 讀取檔案 buffer
-    const fileBuffer = await fs.readFile(fileObj.filepath);
+    const result = await hfResponse.json();
+    const prompt = result[0]?.generated_text || '無法產生描述';
 
- // 在 hf.imageToText 這一行改成：
-const result = await hf.imageToText({
-  data: fileBuffer,
-  model: 'nlpconnect/vit-gpt2-image-captioning',   // 這個模型比較穩定
-});
-
-    const generatedPrompt = result.generated_text || "無法產生描述，請再試一次。";
-
-    // 清理暫存檔案
-    await fs.unlink(fileObj.filepath).catch(() => {});
-
-    return res.status(200).json({ 
-      prompt: generatedPrompt 
-    });
+    return res.status(200).json({ prompt });
 
   } catch (error) {
-    console.error('Analyze API Error:', error);
+    console.error('API Error:', error);
     return res.status(500).json({ 
-      error: error.message || '伺服器發生錯誤，請稍後再試' 
+      error: error.message || '分析失敗，請試較小的圖片' 
     });
   }
 }
