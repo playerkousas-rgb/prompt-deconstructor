@@ -46,30 +46,7 @@ export default function Home() {
           Prompt 解構引擎
         </h1>
 
-        <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700">
-          <div className="mb-8">
-            <label className="block text-sm text-gray-400 mb-2">
-              上傳圖片 (JPG/PNG)
-            </label>
-            <div className="border-2 border-dashed border-gray-600 rounded-xl p-12 text-center hover:border-cyan-400 transition">
-              <input 
-                type="file" 
-                accept="image/*"
-                onChange={handleUpload}
-                className="hidden"
-                id="image-upload"
-              />
-              <label 
-                htmlFor="image-upload"
-                className="cursor-pointer flex flex-col items-center"
-              >
-                <svg className="w-12 h-12 text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L12 9.9M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                </svg>
-                <span className="text-gray-400">點擊上傳或拖曳圖片到這裡</span>
-              </label>
-            </div>
-          </div>
+      
 
           {image && (
             <div className="mb-8">
