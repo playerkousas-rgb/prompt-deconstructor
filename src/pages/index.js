@@ -8,18 +8,24 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+ const handleFileSelect = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => setImage(reader.result);
-    reader.readAsDataURL(file);
+  // 新增：大小限制（3MB）
+  if (file.size > 3 * 1024 * 1024) {
+    setError('圖片太大！請上傳小於 3MB 的圖片（建議 1024x1024 左右）');
+    return;
+  }
 
-    setSelectedFile(file);
-    setPrompt('');
-    setError(null);
-  };
+  const reader = new FileReader();
+  reader.onload = () => setImage(reader.result);
+  reader.readAsDataURL(file);
+
+  setSelectedFile(file);
+  setPrompt('');
+  setError(null);
+};
 
   const handleAnalyze = async () => {
     if (!selectedFile) {
