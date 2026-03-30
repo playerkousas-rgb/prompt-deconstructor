@@ -1,3 +1,4 @@
+// Force redeploy - 2026 test
 import { useState } from 'react';
 
 export default function Home() {
