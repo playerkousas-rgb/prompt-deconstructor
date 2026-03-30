@@ -1,7 +1,0 @@
-{
-  "build": {
-    "env": {
-      "HUGGINGFACE_API_TOKEN": "@huggingface_token"
-    }
-  }
-}
