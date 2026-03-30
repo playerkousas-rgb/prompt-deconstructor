@@ -2,28 +2,25 @@
 import { useState } from 'react';
 
 export default function Home() {
-  const [image, setImage] = useState(null);        // 預覽圖片 (base64)
-  const [selectedFile, setSelectedFile] = useState(null); // 實際檔案
+  const [image, setImage] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // 選擇檔案 → 只預覽，不立即分析
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // 預覽圖片
     const reader = new FileReader();
     reader.onload = () => setImage(reader.result);
     reader.readAsDataURL(file);
 
     setSelectedFile(file);
-    setPrompt('');      // 清空之前的結果
+    setPrompt('');
     setError(null);
   };
 
-  // 點擊「開始檢測」才執行 AI 分析
   const handleAnalyze = async () => {
     if (!selectedFile) {
       setError('請先選擇一張圖片');
@@ -42,23 +39,26 @@ export default function Home() {
         body: formData,
       });
 
-      const data = await res.json();
-
-      if (!res.ok || data.error) {
-        throw new Error(data.error || '分析失敗，請稍後再試');
+      // 加強錯誤處理
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `HTTP error! status: ${res.status}`);
       }
 
-      setPrompt(data.prompt || data.result || '未取得 Prompt');
-  } catch (err) {
-  console.error('Full error:', err);   // 加這行方便除錯
-  let errorMsg = err.message;
-  
-  if (err.message.includes('JSON')) {
-    errorMsg = '後端返回非 JSON 格式（可能是 API Key 問題或模型錯誤）';
-  }
-  
-  setError(errorMsg);
-}
+      const data = await res.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setPrompt(data.prompt || '未取得 Prompt');
+    } catch (err) {
+      console.error('Full error:', err);
+      setError(err.message || '分析失敗，請稍後再試');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6 md:p-8">
