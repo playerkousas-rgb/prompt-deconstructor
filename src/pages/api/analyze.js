@@ -46,11 +46,11 @@ export default async function handler(req, res) {
     // 讀取檔案 buffer
     const fileBuffer = await fs.readFile(fileObj.filepath);
 
-    // 呼叫 Hugging Face 圖像轉文字
-    const result = await hf.imageToText({
-      data: fileBuffer,
-      model: 'Salesforce/blip-image-captioning-large',   // 穩定且效果好的模型
-    });
+ // 在 hf.imageToText 這一行改成：
+const result = await hf.imageToText({
+  data: fileBuffer,
+  model: 'nlpconnect/vit-gpt2-image-captioning',   // 這個模型比較穩定
+});
 
     const generatedPrompt = result.generated_text || "無法產生描述，請再試一次。";
 
