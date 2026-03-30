@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 
 export const config = {
   api: {
-    bodyParser: false,        // 重要！必須關閉
+    bodyParser: false,
   },
 };
 
@@ -14,12 +14,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const form = formidable({
-      keepExtensions: true,
-      maxFileSize: 4 * 1024 * 1024,   // 限制單檔最大 4MB
-    });
+    const form = formidable({ keepExtensions: true, maxFileSize: 4 * 1024 * 1024 });
 
-    // 使用 Promise 包裝 parse（最穩定寫法）
     const { files } = await new Promise((resolve, reject) => {
       form.parse(req, (err, fields, files) => {
         if (err) reject(err);
@@ -28,17 +24,15 @@ export default async function handler(req, res) {
     });
 
     const uploadedFile = files.image?.[0] || files.image;
-
     if (!uploadedFile || !uploadedFile.filepath) {
-      return res.status(400).json({ error: '沒有收到有效的圖片檔案' });
+      return res.status(400).json({ error: '沒有收到圖片檔案' });
     }
 
-    // 讀取檔案成 buffer
     const fileBuffer = await fs.readFile(uploadedFile.filepath);
 
-    // 直接呼叫 Hugging Face Inference API（純 fetch，最穩定）
+    // === 使用新的 Hugging Face Router Endpoint ===
     const hfResponse = await fetch(
-      'https://api-inference.huggingface.co/models/nlpconnect/vit-gpt2-image-captioning',
+      'https://router.huggingface.co/hf-inference/models/nlpconnect/vit-gpt2-image-captioning',
       {
         method: 'POST',
         headers: {
@@ -57,7 +51,7 @@ export default async function handler(req, res) {
     const result = await hfResponse.json();
     const generatedPrompt = result[0]?.generated_text || result.generated_text || "無法產生描述，請再試一次。";
 
-    // 清理暫存檔案
+    // 清理暫存檔
     await fs.unlink(uploadedFile.filepath).catch(() => {});
 
     return res.status(200).json({ prompt: generatedPrompt });
@@ -65,9 +59,7 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error('API Error:', error);
     return res.status(500).json({ 
-      error: error.message.includes('Payload too large') 
-        ? '圖片太大！請上傳小於 3MB 的圖片' 
-        : (error.message || '分析失敗，請稍後再試')
+      error: error.message || '分析失敗，請上傳較小的圖片再試' 
     });
   }
 }
