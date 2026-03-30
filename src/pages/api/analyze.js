@@ -5,53 +5,66 @@ import fs from 'fs/promises';
 
 export const config = {
   api: {
-    bodyParser: false,   // 必須關閉，讓 formidable 自己處理
+    bodyParser: false,
   },
 };
 
-const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);  // 需要你在 Vercel 設定這個環境變數
+const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: '只允許 POST 請求' });
+    return res.status(405).json({ error: '只支援 POST 請求' });
   }
 
   try {
-    const form = formidable({});
+    const form = formidable({ multiples: false });
 
-    const [fields, files] = await form.parse(req);
+    // 使用 Promise 包裝 parse，比較穩定
+    const parseForm = () => 
+      new Promise((resolve, reject) => {
+        form.parse(req, (err, fields, files) => {
+          if (err) return reject(err);
+          resolve({ fields, files });
+        });
+      });
 
-    const uploadedFile = files.image?.[0];   // formidable v2 回傳陣列
+    const { files } = await parseForm();
+
+    const uploadedFile = files.image;
 
     if (!uploadedFile) {
-      return res.status(400).json({ error: '沒有收到圖片檔案' });
+      return res.status(400).json({ error: '沒有收到圖片' });
     }
 
-    // 讀取檔案內容（buffer）
-    const fileBuffer = await fs.readFile(uploadedFile.filepath);
+    // formidable v2 中檔案可能是陣列或單一物件
+    const fileObj = Array.isArray(uploadedFile) ? uploadedFile[0] : uploadedFile;
 
-    // 呼叫 Hugging Face 模型進行圖像描述（你可以換成你原本想用的模型）
+    if (!fileObj || !fileObj.filepath) {
+      return res.status(400).json({ error: '檔案處理失敗' });
+    }
+
+    // 讀取檔案 buffer
+    const fileBuffer = await fs.readFile(fileObj.filepath);
+
+    // 呼叫 Hugging Face 圖像轉文字
     const result = await hf.imageToText({
       data: fileBuffer,
-      model: 'Salesforce/blip-image-captioning-large',   // 推薦這個模型，效果不錯
-      // 其他好用模型可選：
-      // 'nlpconnect/vit-gpt2-image-captioning'
-      // 'Salesforce/blip2-opt-2.7b' （較強但較慢）
+      model: 'Salesforce/blip-image-captioning-large',   // 穩定且效果好的模型
     });
 
-    const generatedPrompt = result.generated_text || "無法生成描述";
+    const generatedPrompt = result.generated_text || "無法產生描述，請再試一次。";
 
-    // 清理暫存檔案（重要！）
-    await fs.unlink(uploadedFile.filepath).catch(() => {});
+    // 清理暫存檔案
+    await fs.unlink(fileObj.filepath).catch(() => {});
 
-    return res.status(200).json({
-      prompt: generatedPrompt,
+    return res.status(200).json({ 
+      prompt: generatedPrompt 
     });
 
   } catch (error) {
-    console.error('API Error:', error);
-    return res.status(500).json({
-      error: error.message || '伺服器處理失敗，請稍後再試'
+    console.error('Analyze API Error:', error);
+    return res.status(500).json({ 
+      error: error.message || '伺服器發生錯誤，請稍後再試' 
     });
   }
 }
