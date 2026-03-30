@@ -12,9 +12,8 @@ export default function Home() {
   const file = e.target.files[0];
   if (!file) return;
 
-  // 新增：大小限制（3MB）
-  if (file.size > 3 * 1024 * 1024) {
-    setError('圖片太大！請上傳小於 3MB 的圖片（建議 1024x1024 左右）');
+  if (file.size > 3 * 1024 * 1024) {   // 限制 3MB
+    setError('圖片太大！請上傳小於 3MB 的圖片（建議解析度 1024x1024）');
     return;
   }
 
