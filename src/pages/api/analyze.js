@@ -1,78 +1,57 @@
+// src/pages/api/analyze.js
+import formidable from 'formidable';
 import { HfInference } from '@huggingface/inference';
+import fs from 'fs/promises';
 
 export const config = {
   api: {
-    bodyParser: false, // 禁用 JSON 解析，因為我們處理的是表單數據
+    bodyParser: false,   // 必須關閉，讓 formidable 自己處理
   },
 };
 
+const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);  // 需要你在 Vercel 設定這個環境變數
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: '只允許 POST 請求' });
   }
 
   try {
-    // 1. 解析上傳的圖片
-    const { files } = await new Promise((resolve, reject) => {
-      const formidable = require('formidable');
-      const form = formidable({ multiples: true });
-      
-      form.parse(req, (err, fields, files) => {
-        if (err) reject(err);
-        else resolve({ fields, files });
-      });
-    });
+    const form = formidable({});
 
-    const imageFile = Array.isArray(files.image) ? files.image[0] : files.image;
-    if (!imageFile) {
-      return res.status(400).json({ error: 'No image uploaded' });
+    const [fields, files] = await form.parse(req);
+
+    const uploadedFile = files.image?.[0];   // formidable v2 回傳陣列
+
+    if (!uploadedFile) {
+      return res.status(400).json({ error: '沒有收到圖片檔案' });
     }
 
-    // 2. 調用 Hugging Face API
-    const hf = new HfInference(process.env.HUGGINGFACE_API_TOKEN);
-    const imageBuffer = await new Promise((resolve) => {
-      require('fs').readFile(imageFile.path, (err, data) => {
-        if (err) throw err;
-        resolve(data);
-      });
+    // 讀取檔案內容（buffer）
+    const fileBuffer = await fs.readFile(uploadedFile.filepath);
+
+    // 呼叫 Hugging Face 模型進行圖像描述（你可以換成你原本想用的模型）
+    const result = await hf.imageToText({
+      data: fileBuffer,
+      model: 'Salesforce/blip-image-captioning-large',   // 推薦這個模型，效果不錯
+      // 其他好用模型可選：
+      // 'nlpconnect/vit-gpt2-image-captioning'
+      // 'Salesforce/blip2-opt-2.7b' （較強但較慢）
     });
 
-    // 使用 CLIP Interrogator 模型
-    const result = await hf.interrogate({
-      model: 'pharma/ci-preprocess',
-      inputs: imageBuffer,
+    const generatedPrompt = result.generated_text || "無法生成描述";
+
+    // 清理暫存檔案（重要！）
+    await fs.unlink(uploadedFile.filepath).catch(() => {});
+
+    return res.status(200).json({
+      prompt: generatedPrompt,
     });
 
-    // 3. 格式化 prompt (重點：加入設計師思維)
-    const { caption, style, elements } = result;
-    
-    // 動態生成設計師解讀
-    const designInsights = [
-      `專業設計解讀: ${caption}`,
-      `風格特徵: ${style.join(', ')}`,
-      `核心元素: ${elements.join(', ')}`,
-      `色彩分析: 高頻色調為 ${elements.filter(e => e.includes('#')).join(', ') || '無法識別'}`,
-      `光影解碼: ${elements.filter(e => e.includes('light') || e.includes('shadow')).join(', ') || '均勻光線'}`
-    ].join('\n');
-
-    // SD 專用 prompt (關鍵：加入權重和負面詞)
-    const sdPrompt = [
-      caption,
-      style.slice(0, 3).map(s => `${s} (1.2)`).join(', '),
-      `colors: ${elements.filter(e => e.includes('#')).slice(0, 2).join(', ') || 'blue, gold'}`,
-      `negative: lowres, blurry, text, signature, watermark, cartoon, 3D render`
-    ].join(', ');
-
-    // 4. 傳回結果
-    res.status(200).json({ 
-      prompt: sdPrompt,
-      analysis: designInsights
-    });
   } catch (error) {
-    console.error('Analysis failed:', error);
-    res.status(500).json({ 
-      error: error.message || 'Analysis failed',
-      details: error.details
+    console.error('API Error:', error);
+    return res.status(500).json({
+      error: error.message || '伺服器處理失敗，請稍後再試'
     });
   }
 }
