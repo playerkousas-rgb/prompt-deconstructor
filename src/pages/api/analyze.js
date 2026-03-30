@@ -30,9 +30,9 @@ export default async function handler(req, res) {
 
     const fileBuffer = await fs.readFile(uploadedFile.filepath);
 
-    // === 使用新的 Hugging Face Router Endpoint ===
+    // 使用目前較穩定的 BLIP 模型
     const hfResponse = await fetch(
-      'https://router.huggingface.co/hf-inference/models/nlpconnect/vit-gpt2-image-captioning',
+      'https://router.huggingface.co/hf-inference/models/Salesforce/blip-image-captioning-large',
       {
         method: 'POST',
         headers: {
@@ -51,7 +51,6 @@ export default async function handler(req, res) {
     const result = await hfResponse.json();
     const generatedPrompt = result[0]?.generated_text || result.generated_text || "無法產生描述，請再試一次。";
 
-    // 清理暫存檔
     await fs.unlink(uploadedFile.filepath).catch(() => {});
 
     return res.status(200).json({ prompt: generatedPrompt });
