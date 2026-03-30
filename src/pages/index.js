@@ -49,13 +49,16 @@ export default function Home() {
       }
 
       setPrompt(data.prompt || data.result || '未取得 Prompt');
-    } catch (err) {
-      setError(err.message);
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  } catch (err) {
+  console.error('Full error:', err);   // 加這行方便除錯
+  let errorMsg = err.message;
+  
+  if (err.message.includes('JSON')) {
+    errorMsg = '後端返回非 JSON 格式（可能是 API Key 問題或模型錯誤）';
+  }
+  
+  setError(errorMsg);
+}
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6 md:p-8">
